@@ -71,3 +71,6 @@ main#dashView { padding: 24px; max-width: 1200px; margin: auto; display: grid; g
   .layout { grid-template-columns: 1fr; padding: 14px; }
   .cart { position: static; }
 }
+.order.clickable { cursor: pointer; transition: border-color .15s, transform .1s; }
+.order.clickable:hover { border-color: var(--brand); }
+.order.clickable:active { transform: scale(.98); }

@@ -67,31 +67,42 @@ function renderOrders() {
 
   const f = $("#filter").value;
   const list = orders.filter((o) =>
-f === "ALL" ? true : f === "ACTIVE" ? ["PLACED", "PREPARING", "READY"].includes(o.status) : o.status === f);
+    f === "ALL" ? true : f === "ACTIVE" ? ["PLACED", "PREPARING", "READY"].includes(o.status) : o.status === f);
   $("#orders").replaceChildren(...(list.length ? list.map(orderCard) : [el("p", { class: "muted" }, "No orders here.")]));
 }
 $("#filter").addEventListener("change", renderOrders);
 $("#refreshBtn").addEventListener("click", loadOrders);
 
+const NEXT = { PLACED: "PREPARING", PREPARING: "READY", READY: "COMPLETED" };
+
+async function setStatus(o, status) {
+  try {
+    await call(`/manager/orders/${encodeURIComponent(o.orderId)}`, { method: "PATCH", body: { status } });
+    o.status = status;
+    toast(`Token #${o.token} → ${status}`);
+  } catch (err) { toast(err.message, true); }
+  renderOrders();
+}
+
 function orderCard(o) {
+  const next = NEXT[o.status];
   const select = el("select", {
-    onchange: async (e) => {
-      try {
-        await call(`/manager/orders/${encodeURIComponent(o.orderId)}`, { method: "PATCH", body: { status: e.target.value } });
-        o.status = e.target.value;
-        renderOrders();
-        toast(`Token #${o.token} → ${o.status}`);
-      } catch (err) { toast(err.message, true); e.target.value = o.status; }
-    },
+    onclick: (e) => e.stopPropagation(),
+    onchange: (e) => setStatus(o, e.target.value),
   }, STATUSES.map((s) => el("option", { value: s, selected: s === o.status }, s)));
 
-  return el("div", { class: "card order" },
+  return el("div", {
+    class: "card order" + (next ? " clickable" : ""),
+    title: next ? `Click to move to ${next}` : "",
+    onclick: next ? () => setStatus(o, next) : null,
+  },
     el("div", { class: "row-between" },
       el("b", {}, `Token #${o.token}`),
       el("span", { class: "status s-" + o.status.toLowerCase() }, o.status)),
     el("div", { class: "muted small" }, `${o.userName} (${o.userEmail}) · ${when(o.createdAt)}`),
     el("ul", {}, o.items.map((i) => el("li", {}, `${i.qty} × ${i.name}`))),
     o.note ? el("div", { class: "note" }, "Note: ", o.note) : null,
+    next ? el("div", { class: "muted small" }, `Click card → ${next}`) : null,
     el("div", { class: "row-between" }, el("b", {}, rupees(o.total)), select));
 }
 
