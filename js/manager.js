@@ -67,7 +67,7 @@ function renderOrders() {
 
   const f = $("#filter").value;
   const list = orders.filter((o) =>
-    f === "ALL" ? true : f === "ACTIVE" ? ["PLACED", "PREPARING", "READY"].includes(o.status) : o.status === f);
+f === "ALL" ? true : f === "ACTIVE" ? ["PLACED", "PREPARING", "READY"].includes(o.status) : o.status === f);
   $("#orders").replaceChildren(...(list.length ? list.map(orderCard) : [el("p", { class: "muted" }, "No orders here.")]));
 }
 $("#filter").addEventListener("change", renderOrders);
