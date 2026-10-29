@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Simple Canteen - Cognito (email auth) + HTTP API + Python Lambda + DynamoDB
+
+Parameters:
+  StaffKey:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: Secret staff key managers type to log in (min 8 characters)
+  AllowedOrigin:
+    Type: String
+    Default: "*"
+    Description: Frontend origin for CORS, e.g. https://charan4477.github.io (use * while testing)
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+    MemorySize: 256
+
+Resources:
+  # ---------- Customer auth: Cognito with email sign-up + verification code ----------
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: canteen-customers
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
+        - Name: name
+          Required: false
+          Mutable: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireUppercase: false
+          RequireSymbols: false
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailSubject: Your Canteen verification code
+        EmailMessage: "Welcome to Canteen! Your verification code is {####}"
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: canteen-web
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+      IdTokenValidity: 60
+      AccessTokenValidity: 60
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        IdToken: minutes
+        AccessToken: minutes
+        RefreshToken: days
+
+  # ---------- Data ----------
+  MenuTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: orderId
+          AttributeType: S
+        - AttributeName: userEmail
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: orderId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: byUser
+          KeySchema:
+            - AttributeName: userEmail
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # ---------- API ----------
+  CanteenApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins: [!Ref AllowedOrigin]
+        AllowHeaders: [content-type, authorization, x-staff-token]
+        AllowMethods: [GET, POST, PATCH, DELETE, OPTIONS]
+        MaxAge: 600
+      Auth:
+        Authorizers:
+          CognitoJwt:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
+              audience:
+                - !Ref UserPoolClient
+
+  CanteenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          MENU_TABLE: !Ref MenuTable
+          ORDERS_TABLE: !Ref OrdersTable
+          STAFF_KEY: !Ref StaffKey
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MenuTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
+      Events:
+        # public
+        GetMenu:
+          Type: HttpApi
+          Properties: { ApiId: !Ref CanteenApi, Path: /menu, Method: GET }
+        StaffLogin:
+          Type: HttpApi
+          Properties: { ApiId: !Ref CanteenApi, Path: /manager/login, Method: POST }
+        # customer (Cognito JWT required)
+        PlaceOrder:
+          Type: HttpApi
+          Properties: { ApiId: !Ref CanteenApi, Path: /orders, Method: POST, Auth: { Authorizer: CognitoJwt } }
+        MyOrders:
+          Type: HttpApi
+          Properties: { ApiId: !Ref CanteenApi, Path: /orders/mine, Method: GET, Auth: { Authorizer: CognitoJwt } }
+        # manager (staff token checked inside the Lambda)
+        AllOrders:
+          Type: HttpApi
+          Properties: { ApiId: !Ref CanteenApi, Path: /manager/orders, Method: GET }
+        UpdateOrder:
+          Type: HttpApi
+          Properties: { ApiId: !Ref CanteenApi, Path: "/manager/orders/{id}", Method: PATCH }
+        SaveMenuItem:
+          Type: HttpApi
+          Properties: { ApiId: !Ref CanteenApi, Path: /manager/menu, Method: POST }
+        DeleteMenuItem:
+          Type: HttpApi
+          Properties: { ApiId: !Ref CanteenApi, Path: "/manager/menu/{id}", Method: DELETE }
+
+Outputs:
+  ApiUrl:
+    Description: Paste into frontend/js/config.js as API_URL
+    Value: !Sub https://${CanteenApi}.execute-api.${AWS::Region}.amazonaws.com
+  Region:
+    Value: !Ref AWS::Region
+  UserPoolClientId:
+    Description: Paste into frontend/js/config.js as COGNITO_CLIENT_ID
+    Value: !Ref UserPoolClient
+  UserPoolId:
+    Value: !Ref UserPool

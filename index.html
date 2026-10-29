@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Canteen - Order Food</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html">🍛 Canteen</a>
+    <nav>
+      <span id="who" class="muted"></span>
+      <button id="logoutBtn" class="btn ghost hidden">Sign out</button>
+      <a href="manager.html" class="btn ghost">Staff</a>
+    </nav>
+  </header>
+
+  <!-- ============ AUTH ============ -->
+  <main id="authView" class="auth-wrap">
+    <div class="card auth-card">
+      <div class="tabs">
+        <button class="tab active" data-panel="signinForm">Sign in</button>
+        <button class="tab" data-panel="signupForm">Create account</button>
+      </div>
+
+      <form id="signinForm" class="panel">
+        <label>Email <input type="email" name="email" required autocomplete="email" /></label>
+        <label>Password <input type="password" name="password" required autocomplete="current-password" /></label>
+        <button class="btn primary" type="submit">Sign in</button>
+        <a href="#" id="forgotLink" class="small">Forgot password?</a>
+      </form>
+
+      <form id="signupForm" class="panel hidden">
+        <label>Name <input type="text" name="name" required maxlength="40" /></label>
+        <label>Email <input type="email" name="email" required autocomplete="email" /></label>
+        <label>Password <input type="password" name="password" required minlength="8" autocomplete="new-password" /></label>
+        <p class="small muted">8+ characters, with a lowercase letter and a number.</p>
+        <button class="btn primary" type="submit">Create account</button>
+      </form>
+
+      <form id="verifyForm" class="panel hidden">
+        <p>We emailed a 6-digit code to <b id="verifyEmail"></b>.</p>
+        <label>Verification code <input type="text" name="code" required inputmode="numeric" maxlength="6" /></label>
+        <button class="btn primary" type="submit">Verify email</button>
+        <a href="#" id="resendLink" class="small">Resend code</a>
+      </form>
+
+      <form id="forgotForm" class="panel hidden">
+        <label>Email <input type="email" name="email" required /></label>
+        <button class="btn" type="button" id="sendResetBtn">Send reset code</button>
+        <label>Code <input type="text" name="code" inputmode="numeric" maxlength="6" /></label>
+        <label>New password <input type="password" name="password" minlength="8" /></label>
+        <button class="btn primary" type="submit">Reset password</button>
+      </form>
+    </div>
+  </main>
+
+  <!-- ============ CUSTOMER APP ============ -->
+  <main id="appView" class="layout hidden">
+    <section>
+      <div class="row-between">
+        <h2>Menu</h2>
+        <input id="search" type="search" placeholder="Search dishes…" />
+      </div>
+      <div id="menu"></div>
+    </section>
+
+    <aside class="card cart">
+      <h2>Your cart</h2>
+      <ul id="cartList" class="cart-list"></ul>
+      <textarea id="note" maxlength="200" placeholder="Note for the kitchen (optional)"></textarea>
+      <div class="row-between total"><span>Total</span><b id="cartTotal">₹0</b></div>
+      <button id="placeBtn" class="btn primary wide" disabled>Place order</button>
+    </aside>
+
+    <section class="full">
+      <div class="row-between">
+        <h2>My orders</h2>
+        <button id="refreshOrders" class="btn ghost">Refresh</button>
+      </div>
+      <div id="orders" class="orders"></div>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/customer.js"></script>
+</body>
+</html>

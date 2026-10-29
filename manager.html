@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Canteen - Manager</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html">🍛 Canteen <span class="badge">Manager</span></a>
+    <nav><button id="logoutBtn" class="btn ghost hidden">Log out</button></nav>
+  </header>
+
+  <main id="loginView" class="auth-wrap">
+    <form id="staffForm" class="card auth-card">
+      <h2>Staff login</h2>
+      <label>Staff key <input type="password" name="staffKey" required autocomplete="off" /></label>
+      <button class="btn primary" type="submit">Log in</button>
+      <a href="index.html" class="small">← Back to ordering</a>
+    </form>
+  </main>
+
+  <main id="dashView" class="hidden">
+    <section class="stats" id="stats"></section>
+
+    <section>
+      <div class="row-between">
+        <h2>Orders</h2>
+        <div>
+          <select id="filter">
+            <option value="ACTIVE">Active</option>
+            <option value="ALL">All</option>
+            <option value="PLACED">Placed</option>
+            <option value="PREPARING">Preparing</option>
+            <option value="READY">Ready</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+          <button id="refreshBtn" class="btn ghost">Refresh</button>
+        </div>
+      </div>
+      <div id="orders" class="orders"></div>
+    </section>
+
+    <section>
+      <h2>Menu</h2>
+      <form id="itemForm" class="card inline-form">
+        <input type="hidden" name="id" />
+        <input name="name" placeholder="Dish name" required maxlength="60" />
+        <input name="price" type="number" min="1" max="10000" placeholder="Price ₹" required />
+        <input name="category" placeholder="Category (Meals, Snacks…)" maxlength="30" />
+        <label class="check"><input type="checkbox" name="available" checked /> Available</label>
+        <button class="btn primary" type="submit">Save item</button>
+        <button class="btn ghost" type="reset">Clear</button>
+      </form>
+      <table class="table">
+        <thead><tr><th>Dish</th><th>Category</th><th>Price</th><th>Available</th><th></th></tr></thead>
+        <tbody id="menuRows"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/manager.js"></script>
+</body>
+</html>
