@@ -1,35 +1,71 @@
-# 🍛 Canteen
+# Smart Canteen Ordering System
 
-A simple canteen ordering system.
+A simple web app for ordering food from the college canteen. Students order from their browser and get a pickup token. The kitchen sees orders live and updates their status, and students can follow their order on the My Orders page.
 
-- **Frontend:** plain HTML, CSS and JavaScript (no frameworks, no build step)
-- **Customers:** sign up and sign in with email + password, verified by a 6-digit code emailed by **Amazon Cognito**
-- **Manager:** logs in with a secret **staff key**, sees live orders, updates their status, and edits the menu
-- **Backend on AWS:** API Gateway (HTTP API) → one Python Lambda → two DynamoDB tables, all created by one SAM template
+Built for our Web Programming project with plain HTML, CSS and JavaScript on the front and AWS on the back.
+
+## Features
+
+**Customer**
+- Sign up with email and password, verified with a 6-digit code (Amazon Cognito)
+- Browse the menu by category and search dishes
+- Add to cart, change quantity, add a note for the kitchen
+- Place an order and get a pickup token
+- My Orders page: live status (Placed > Preparing > Ready > Completed), refreshes every 10 seconds
+- Badge in the header showing how many orders are in progress
+
+**Manager (Staff)**
+- Log in with a staff key (Staff button on the top right)
+- See all orders, filter by status
+- Click an order card to move it to the next status, or pick any status from the dropdown
+- Today's order count and revenue
+- Add, edit, delete menu items and mark them sold out
+
+## Tech stack
+
+| Part | Used |
+|---|---|
+| Frontend | HTML, CSS, JavaScript (no framework, no build step) |
+| Customer login | Amazon Cognito (email + password) |
+| Manager login | Staff key, checked in Lambda, gives an 8-hour token |
+| API | Amazon API Gateway (HTTP API) |
+| Backend | AWS Lambda (Python 3.12) |
+| Database | Amazon DynamoDB |
+| Hosting | GitHub Pages |
+
+## Folder structure
 
 ```
-index.html          customer page (sign in, menu, cart, my orders)
-manager.html        manager dashboard (staff key login, orders, menu)
-css/style.css
-js/config.js        ← paste your AWS values here after deploying
-js/auth.js          Cognito email auth with plain fetch (no SDK)
-js/api.js           API helper + safe DOM builder
-js/customer.js
-js/manager.js
-backend/template.yaml   AWS SAM: Cognito, DynamoDB, Lambda, HTTP API
-backend/src/app.py      the Lambda (all API routes)
-backend/tests/          local test with moto (fake DynamoDB)
+index.html            menu, cart, sign in / sign up
+orders.html           my orders with live status
+manager.html          staff dashboard
+css/style.css         all styles
+js/config.js          AWS values (API URL, Cognito region and client id)
+js/auth.js            Cognito sign up / sign in using fetch (no SDK)
+js/api.js             small helper for API calls and building HTML safely
+js/customer.js        menu and cart
+js/orders.js          my orders page
+js/manager.js         staff dashboard
+backend/src/app.py    the Lambda code (all routes)
+backend/template.yaml optional SAM template to create everything in one go
+backend/tests/        tests with moto (fake DynamoDB)
 ```
 
 ## How it works
 
 ```
-Browser ──(email + password)──▶ Amazon Cognito ──▶ ID token (JWT)
-Browser ──(JWT)──▶ API Gateway [JWT authorizer] ──▶ Lambda ──▶ DynamoDB
-Manager ──(staff key)──▶ /manager/login ──▶ signed 8-hour staff token ──▶ /manager/*
+Customer  -> Cognito (email + password) -> gets a login token
+Customer  -> API Gateway (checks token) -> Lambda -> DynamoDB
+Manager   -> /manager/login (staff key) -> staff token -> /manager/* routes
 ```
 
-| Method | Path | Who |
+DynamoDB tables:
+- `canteen-menu` - menu items (id, name, price, category, available)
+- `canteen-orders` - orders, with a `byUser` index so a customer can fetch only their own orders
+
+## API routes
+
+| Method | Path | Who can call it |
 |---|---|---|
 | GET | /menu | anyone |
 | POST | /orders | signed-in customer |
@@ -40,77 +76,66 @@ Manager ──(staff key)──▶ /manager/login ──▶ signed 8-hour staff 
 | POST | /manager/menu | manager |
 | DELETE | /manager/menu/{id} | manager |
 
-Security basics that are built in:
-- The server recomputes every price from the menu, so nobody can change the price in the browser.
-- The staff key lives only in Lambda (never in the frontend code). Managers get a signed token that expires in 8 hours.
-- Customers only ever see their own orders (email comes from the verified Cognito token).
-- All user text is inserted with `textContent`, never `innerHTML`, so no XSS.
+Only `POST /orders` and `GET /orders/mine` use the Cognito JWT authorizer. The `/manager` routes must NOT have it, because they check the staff token inside Lambda.
 
-## Deploy the backend (about 5 minutes)
+## Security
 
-1. Sign in to the AWS Console, switch region to **Asia Pacific (Mumbai) ap-south-1**, and open **CloudShell** (the `>_` icon at the top). SAM CLI is already installed there.
-2. Get the code and deploy:
-   ```bash
-   git clone https://github.com/charan4477/canteen.git
-   cd canteen/backend
-   sam build
-   sam deploy --guided
-   ```
-   Answer the prompts:
-   - Stack name: `canteen`
-   - Region: `ap-south-1`
-   - Parameter **StaffKey**: choose a secret, 8+ characters (this is what managers type)
-   - Parameter AllowedOrigin: `*` for now
-   - "CanteenFunction has no authentication. Is this okay?" → **y** (manager routes check the staff key inside the Lambda)
-   - Accept the other defaults (`Y` to save the config).
-3. When it finishes, copy the **Outputs**: `ApiUrl`, `Region`, `UserPoolClientId`.
+- Prices are recalculated on the server from the menu, so changing a price in the browser does nothing.
+- The staff key is only stored in Lambda, never in the frontend.
+- Customers can only see their own orders (the email comes from the verified Cognito token).
+- User text is added with `textContent`, not `innerHTML`, so scripts can't be injected.
+
+## AWS setup (what we did in the Console, region us-east-1)
+
+1. **DynamoDB** - create `canteen-menu` (key `id`) and `canteen-orders` (key `orderId`) with a global index `byUser` (partition key `userEmail`, sort key `createdAt`).
+2. **Cognito** - create a user pool with email sign-in and an app client (no secret) with `USER_PASSWORD_AUTH` turned on.
+3. **Lambda** - create `canteen-api` (Python 3.12), paste `backend/src/app.py` as `lambda_function.py`, give it access to both tables, and set the environment variables `MENU_TABLE`, `ORDERS_TABLE` and `STAFF_KEY`.
+4. **API Gateway** - create an HTTP API, add the routes above, attach them to the Lambda, and add the Cognito JWT authorizer only to the two `/orders` routes. Turn on CORS.
+5. **Lambda permission** - allow API Gateway to call the Lambda with source ARN `arn:aws:execute-api:us-east-1:<account-id>:<api-id>/*/*`. (With a separate permission per route, some routes returned 500 errors.)
+
+Or use the SAM template instead: `cd backend && sam build && sam deploy --guided`.
 
 ## Connect the frontend
 
-Edit `js/config.js`:
+Put your values in `js/config.js`:
 
 ```js
 window.CANTEEN_CONFIG = {
-  API_URL: "https://abc123.execute-api.ap-south-1.amazonaws.com",
-  COGNITO_REGION: "ap-south-1",
-  COGNITO_CLIENT_ID: "1a2b3c4d5e6f7g8h9i0j",
+  API_URL: "https://<api-id>.execute-api.us-east-1.amazonaws.com",
+  COGNITO_REGION: "us-east-1",
+  COGNITO_CLIENT_ID: "<app-client-id>",
 };
 ```
 
-These values are safe to commit: they are public identifiers, not secrets.
+These are public ids, not secrets, so they're fine to commit.
 
-## Host it
+## Run it
 
-**GitHub Pages:** repo Settings → Pages → Source: *Deploy from a branch* → `main` / `(root)`.
-The site will be at `https://charan4477.github.io/canteen/`.
-
-Then lock CORS to your site (optional but better):
-```bash
-sam deploy --parameter-overrides StaffKey=YOUR_KEY AllowedOrigin=https://charan4477.github.io
-```
-
-Locally, any static server works: `python3 -m http.server 8000` then open http://localhost:8000.
+- **Locally:** `python -m http.server 8000`, then open http://localhost:8000
+- **GitHub Pages:** Settings > Pages > Deploy from branch > `main` / root. The site will be at `https://charan4477.github.io/canteen/`
 
 ## Try it
 
-1. Open the site → **Create account** → check your email for the code → verify. You're signed in.
-2. Add dishes, place an order, and note your pickup token number.
-3. Open **Staff** (`manager.html`) → enter the staff key → change the order to *Preparing* → *Ready*.
-   The customer page picks up the new status within 20 seconds.
-4. Add, edit, mark sold out, or delete dishes from the Menu section.
+1. Open the site, create an account, and enter the code from your email.
+2. Add dishes to the cart and place an order. You'll be taken to My Orders with your token.
+3. Open **Staff**, enter the staff key, and click the order card to move it to Preparing, then Ready.
+4. Go back to My Orders. The status updates by itself within 10 seconds.
 
-The first time `/menu` is called with an empty table, a starter menu is added automatically.
+## Problems we ran into
 
-## Run the backend test locally
+- **500 error on /orders/mine** - the Lambda permission only allowed some routes. Fixed with a single `/*/*` source ARN.
+- **401 "Manager login required" on status update** - the JWT authorizer was attached to the manager routes by mistake. Removing it fixed it.
+- **CORS errors** - CORS had to be turned on in API Gateway, with the `Authorization` and `x-staff-token` headers allowed.
 
-```bash
-pip install "moto[dynamodb]" boto3 pytest
-pytest backend/tests -q
-```
+## Future ideas
 
-## Notes and limits
+- UPI payment
+- Notification when the order is ready
+- Ratings for dishes
+- Sales charts for the manager
 
-- Cognito's built-in email sender allows about 50 emails a day, plenty for a college demo. For more, connect Amazon SES in the User Pool settings.
-- Everything here fits in the AWS Free Tier for a class project.
-- To delete everything: `sam delete --stack-name canteen`.
-- Order statuses: PLACED → PREPARING → READY → COMPLETED (or CANCELLED).
+## Notes
+
+- Cognito's built-in email can send about 50 emails a day, which is enough for a demo.
+- Everything fits in the AWS Free Tier.
+- Run the backend tests: `pip install "moto[dynamodb]" boto3 pytest` then `pytest backend/tests -q`
