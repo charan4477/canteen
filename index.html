@@ -8,9 +8,12 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="index.html">🍛 Canteen</a>
+    <a class="brand" href="index.html"><span class="logo">C</span> Canteen</a>
     <nav>
+      <a href="index.html" id="menuLink" class="navlink active hidden">Menu</a>
+      <a href="orders.html" id="ordersLink" class="navlink hidden">My orders <span id="activeCount" class="count hidden"></span></a>
       <span id="who" class="muted"></span>
+      <a href="manager.html" class="btn ghost">Staff</a>
       <button id="logoutBtn" class="btn ghost hidden">Sign out</button>
     </nav>
   </header>
@@ -73,13 +76,6 @@
       <button id="placeBtn" class="btn primary wide" disabled>Place order</button>
     </aside>
 
-    <section class="full">
-      <div class="row-between">
-        <h2>My orders</h2>
-        <button id="refreshOrders" class="btn ghost">Refresh</button>
-      </div>
-      <div id="orders" class="orders"></div>
-    </section>
   </main>
 
   <script src="js/config.js"></script>

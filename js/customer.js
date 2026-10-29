@@ -152,7 +152,7 @@ $("#placeBtn").addEventListener("click", async () => {
     const { order } = await api("/orders", { method: "POST", idToken, body: { items, note: $("#note").value } });
     cart.clear(); $("#note").value = ""; renderCart();
     toast(`Order placed! Pickup token #${order.token}`);
-    loadOrders();
+    setTimeout(() => { location.href = "orders.html?new=" + encodeURIComponent(order.orderId); }, 1200);
   } catch (err) {
     toast(err.message, true);
   } finally {
@@ -160,28 +160,17 @@ $("#placeBtn").addEventListener("click", async () => {
   }
 });
 
-// ---------------- my orders ----------------
-async function loadOrders() {
+// ---------------- active order count (nav badge) ----------------
+async function loadActiveCount() {
   try {
     const idToken = await Auth.token();
-    if (!idToken) return location.reload();
+    if (!idToken) return;
     const { orders } = await api("/orders/mine", { idToken });
-    $("#orders").replaceChildren(...(orders.length ? orders.map(orderCard) : [el("p", { class: "muted" }, "No orders yet.")]));
-  } catch (err) {
-    toast(err.message, true);
-  }
+    const n = orders.filter((o) => ["PLACED", "PREPARING", "READY"].includes(o.status)).length;
+    $("#activeCount").textContent = n;
+    $("#activeCount").classList.toggle("hidden", n === 0);
+  } catch { /* badge is optional */ }
 }
-
-function orderCard(o) {
-  return el("div", { class: "card order" },
-    el("div", { class: "row-between" },
-      el("b", {}, `Token #${o.token}`),
-      el("span", { class: "status s-" + o.status.toLowerCase() }, o.status)),
-    el("div", { class: "muted small" }, `${when(o.createdAt)} · Order ${o.orderId}`),
-    el("ul", {}, o.items.map((i) => el("li", {}, `${i.qty} × ${i.name} — ${rupees(i.subtotal)}`))),
-    el("div", { class: "total" }, "Total ", el("b", {}, rupees(o.total))));
-}
-$("#refreshOrders").addEventListener("click", loadOrders);
 
 // ---------------- start ----------------
 async function start() {
@@ -194,11 +183,13 @@ async function start() {
   const u = Auth.user();
   $("#who").textContent = "Hi, " + u.name;
   $("#logoutBtn").classList.remove("hidden");
+  $("#menuLink").classList.remove("hidden");
+  $("#ordersLink").classList.remove("hidden");
   $("#authView").classList.add("hidden");
   $("#appView").classList.remove("hidden");
   await loadMenu();
   renderCart();
-  loadOrders();
-  setInterval(loadOrders, 20000); // see status changes from the kitchen
+  loadActiveCount();
+  setInterval(loadActiveCount, 20000);
 }
 start();
